@@ -30,5 +30,12 @@ for (const file of eventFiles) {
         client.on(event.name, (...args) => event.execute(...args));
     }
 }
+const mongoose = require('mongoose');
+
+// Connect to MongoDB
+mongoose.connect(config.mongoUri)
+    .then(() => console.log('Connected to MongoDB Atlas!'))
+    .catch((error) => console.error('MongoDB connection error:', error));
+
 
 client.login(config.token);
