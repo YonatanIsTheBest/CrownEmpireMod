@@ -1,50 +1,54 @@
-const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
-const Giveaway = require('../models/Giveaway'); // Pull in our database schema
+const { SlashCommandBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, PermissionFlagsBits } = require('discord.js');
 
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('giveaway')
-        .setDescription('Start a giveaway in the current channel')
-        .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
-        .addStringOption(option =>
-            option.setName('prize')
-                .setDescription('What are you giving away?')
-                .setRequired(true))
-        .addIntegerOption(option =>
-            option.setName('duration')
-                .setDescription('Duration of the giveaway in minutes')
-                .setRequired(true))
-        .addIntegerOption(option =>
-            option.setName('winners')
-                .setDescription('Number of winners (default: 1)')
-                .setRequired(false)),
+        .setDescription('Open the giveaway creation form')
+        .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
     async execute(interaction) {
-        const prize = interaction.options.getString('prize');
-        const durationMinutes = interaction.options.getInteger('duration');
-        const winnerCount = interaction.options.getInteger('winners') || 1;
-        
-        const endsAt = new Date(Date.now() + durationMinutes * 60 * 1000);
+        // 1. Create the Modal (The Popup Window)
+        const modal = new ModalBuilder()
+            .setCustomId('giveaway_modal')
+            .setTitle('Create a Giveaway');
 
-        const giveawayEmbed = new EmbedBuilder()
-            .setTitle(`🎉 **GIVEAWAY: ${prize}** 🎉`)
-            .setDescription(`React with 🎉 to enter!\n\n**Ends:** <t:${Math.floor(endsAt.getTime() / 1000)}:R>\n**Hosted by:** ${interaction.user}\n**Winners:** ${winnerCount}`)
-            .setColor('#5865F2')
-            .setTimestamp(endsAt)
-            .setFooter({ text: 'Giveaway ends' });
+        // 2. Create the Text Input Fields
+        const durationInput = new TextInputBuilder()
+            .setCustomId('duration')
+            .setLabel('Duration (in minutes)')
+            .setPlaceholder('Ex: 10')
+            .setStyle(TextInputStyle.Short)
+            .setRequired(true);
 
-        await interaction.reply({ content: 'Giveaway started!', ephemeral: true });
-        const giveawayMessage = await interaction.channel.send({ embeds: [giveawayEmbed] });
-        await giveawayMessage.react('🎉');
+        const winnersInput = new TextInputBuilder()
+            .setCustomId('winners')
+            .setLabel('Number of Winners')
+            .setValue('1') // Sets a default value
+            .setStyle(TextInputStyle.Short)
+            .setRequired(true);
 
-        // SAVE TO MONGODB INSTEAD OF A TIMER
-        await Giveaway.create({
-            messageId: giveawayMessage.id,
-            channelId: interaction.channel.id,
-            prize: prize,
-            endsAt: endsAt,
-            winnersCount: winnerCount,
-            ended: false
-        });
+        const prizeInput = new TextInputBuilder()
+            .setCustomId('prize')
+            .setLabel('Prize')
+            .setPlaceholder('What are you giving away?')
+            .setStyle(TextInputStyle.Short)
+            .setRequired(true);
+
+        const descInput = new TextInputBuilder()
+            .setCustomId('description')
+            .setLabel('Description')
+            .setPlaceholder('Optional details about the giveaway')
+            .setStyle(TextInputStyle.Paragraph) // Makes it a larger text box
+            .setRequired(false);
+
+        // 3. Package the inputs into Action Rows (Discord requires 1 input per row)
+        const row1 = new ActionRowBuilder().addComponents(durationInput);
+        const row2 = new ActionRowBuilder().addComponents(winnersInput);
+        const row3 = new ActionRowBuilder().addComponents(prizeInput);
+        const row4 = new ActionRowBuilder().addComponents(descInput);
+
+        // 4. Add the rows to the modal and show it to the user
+        modal.addComponents(row1, row2, row3, row4);
+        await interaction.showModal(modal);
     },
 };
