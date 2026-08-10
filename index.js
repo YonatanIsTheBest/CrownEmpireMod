@@ -1,6 +1,7 @@
 const { Client, GatewayIntentBits, Collection } = require('discord.js');
 const fs = require('fs');
 const config = require('./config.json');
+const Giveaway = require('./models/Giveaway');
 // Dummy HTTP server for Render health checks
 const http = require('http');
 http.createServer((req, res) => res.end('Bot is online!')).listen(process.env.PORT || 3000);
@@ -33,9 +34,54 @@ for (const file of eventFiles) {
 const mongoose = require('mongoose');
 
 // Connect to MongoDB
-mongoose.connect(config.mongoUri)
+mongoose.connect(config.mongoURI)
     .then(() => console.log('Connected to MongoDB Atlas!'))
     .catch((error) => console.error('MongoDB connection error:', error));
 
+    client.once('ready', () => {
+    // This loop runs every 60,000 milliseconds (1 minute)
+    setInterval(async () => {
+        const now = new Date();
+        
+        // Find giveaways that have passed their end time but haven't been completed yet
+        const expiredGiveaways = await Giveaway.find({ ended: false, endsAt: { $lt: now } });
+
+        for (const giveaway of expiredGiveaways) {
+            try {
+                const channel = await client.channels.fetch(giveaway.channelId);
+                if (!channel) continue;
+                
+                const message = await channel.messages.fetch(giveaway.messageId);
+                if (!message) continue;
+
+                const reaction = message.reactions.cache.get('🎉');
+                if (!reaction) continue;
+
+                const users = await reaction.users.fetch();
+                const validEntrants = users.filter(u => !u.bot).map(u => u); // Ignore bots
+
+                if (validEntrants.length === 0) {
+                    await channel.send(`Nobody entered the giveaway for **${giveaway.prize}**! 😢`);
+                } else {
+                    const winners = [];
+                    for (let i = 0; i < giveaway.winnersCount; i++) {
+                        if (validEntrants.length === 0) break;
+                        const randomIndex = Math.floor(Math.random() * validEntrants.length);
+                        winners.push(validEntrants.splice(randomIndex, 1)[0]);
+                    }
+
+                    const winnerMentions = winners.map(w => `<@${w.id}>`).join(', ');
+                    await channel.send(`🎉 Congratulations ${winnerMentions}! You won **${giveaway.prize}**!`);
+                }
+            } catch (error) {
+                console.error("Error completing giveaway:", error);
+            }
+
+            // Lock the giveaway in the database so it never runs again
+            giveaway.ended = true;
+            await giveaway.save();
+        }
+    }, 60000);
+});
 
 client.login(config.token);
