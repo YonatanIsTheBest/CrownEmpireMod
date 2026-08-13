@@ -1,7 +1,7 @@
 const { Client, GatewayIntentBits, Collection } = require('discord.js');
 const fs = require('fs');
 const config = require('./config.json');
-const Giveaway = require('./models/Giveaway');
+const Giveaway = require('./models/giveaway');
 // Dummy HTTP server for Render health checks
 const http = require('http');
 http.createServer((req, res) => res.end('Bot is online!')).listen(process.env.PORT || 3000);
